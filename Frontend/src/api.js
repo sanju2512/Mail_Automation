@@ -1,5 +1,5 @@
 // API client for Mail Automation Backend
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "https://mail-automation-ln3d.onrender.com";
 
 export async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -10,8 +10,8 @@ export async function request(endpoint, options = {}) {
       try {
         const errorData = await response.json();
         if (errorData.detail) {
-          errorMessage = typeof errorData.detail === "string" 
-            ? errorData.detail 
+          errorMessage = typeof errorData.detail === "string"
+            ? errorData.detail
             : JSON.stringify(errorData.detail);
         }
       } catch (e) {
