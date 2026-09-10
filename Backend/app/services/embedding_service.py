@@ -11,12 +11,17 @@ class EmbeddingService:
 
     def _load_model(self):
         if self._model is None:
+            if getattr(settings, "USE_LIGHTWEIGHT_EMBEDDINGS", False):
+                logger.info("Using lightweight deterministic embeddings as configured.")
+                self._model = "fallback"
+                return
+
             try:
                 from sentence_transformers import SentenceTransformer
                 logger.info(f"Loading SentenceTransformer model '{self.model_name}'...")
                 self._model = SentenceTransformer(self.model_name)
-            except Exception as e:
-                logger.warning(f"Could not load SentenceTransformer directly ({e}). Falling back to lightweight embeddings.")
+            except (ImportError, MemoryError, Exception) as e:
+                logger.warning(f"Could not load SentenceTransformer ({e}). Falling back to lightweight embeddings.")
                 self._model = "fallback"
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:

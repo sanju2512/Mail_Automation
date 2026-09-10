@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # ChromaDB & Embeddings
     CHROMA_PERSIST_DIRECTORY: str = str(BASE_DIR / "data" / "chroma")
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    USE_LIGHTWEIGHT_EMBEDDINGS: bool = False
     RAG_TOP_K: int = 4
 
     # Storage Paths

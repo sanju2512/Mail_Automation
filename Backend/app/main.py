@@ -48,6 +48,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Global Exception Handler
@@ -56,7 +57,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled server error on {request.url.path}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "An internal server error occurred. Please consult the server logs."}
+        content={"detail": f"An internal server error occurred: {str(exc)}"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
     )
 
 # Include API Routers
