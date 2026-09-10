@@ -1,0 +1,60 @@
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.env
+
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+build/
+*.egg-info/
+.eggs/
+wheels/
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Database, vector stores & runtime data
+*.db
+*.sqlite3
+Backend/data/chroma/
+Backend/data/input/*
+!Backend/data/input/.gitkeep
+Backend/data/output/*
+!Backend/data/output/.gitkeep
+Backend/data/knowledge_base/*
+!Backend/data/knowledge_base/.gitkeep
+Backend/data/templates/*
+!Backend/data/templates/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & OS files
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
