@@ -1,5 +1,5 @@
 // API client for Mail Automation Backend
-const API_BASE = "https://mail-automation-ln3d.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://mail-automation-ln3d.onrender.com";
 
 export async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
