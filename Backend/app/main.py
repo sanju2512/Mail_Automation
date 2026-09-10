@@ -51,6 +51,7 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+
 # Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
