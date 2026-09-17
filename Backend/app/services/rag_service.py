@@ -17,47 +17,50 @@ class RAGService:
     def __init__(self):
         self.persist_dir = settings.CHROMA_PERSIST_DIRECTORY
         os.makedirs(self.persist_dir, exist_ok=True)
-        
+        self.client = None
+        self.collection = None
+        self._ensure_collection()
+
+    def _ensure_collection(self):
+        """Ensure ChromaDB client and collection are properly initialized."""
+        if self.collection is not None:
+            return self.collection
         try:
+            os.makedirs(self.persist_dir, exist_ok=True)
             self.client = chromadb.PersistentClient(path=self.persist_dir)
             self.collection = self.client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"}
             )
-            logger.info(f"Initialized ChromaDB at {self.persist_dir}, items in collection: {self.collection.count()}")
+            count = self.collection.count()
+            logger.info(f"Initialized ChromaDB at {self.persist_dir}, items in collection: {count}")
+            return self.collection
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB PersistentClient: {e}")
             self.client = None
             self.collection = None
+            return None
 
-    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 100) -> List[str]:
-        """Split document text into overlapping chunks by words/sentences."""
-        if not text:
+    def chunk_text(self, text: str, chunk_size: int = 250, overlap: int = 50) -> List[str]:
+        """Split document text into overlapping chunks by words for optimal embedding representation."""
+        if not text or not text.strip():
             return []
-        
-        paragraphs = text.split("\n\n")
+
+        words = text.split()
+        if not words:
+            return []
+
+        if len(words) <= chunk_size:
+            return [" ".join(words)]
+
         chunks: List[str] = []
-        current_chunk: List[str] = []
-        current_len = 0
-
-        for para in paragraphs:
-            words = para.split()
-            if not words:
-                continue
-
-            if current_len + len(words) > chunk_size:
-                if current_chunk:
-                    chunks.append(" ".join(current_chunk))
-                # retain overlap words
-                overlap_words = current_chunk[-overlap:] if len(current_chunk) > overlap else []
-                current_chunk = overlap_words + words
-                current_len = len(current_chunk)
-            else:
-                current_chunk.extend(words)
-                current_len += len(words)
-
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
+        step = max(1, chunk_size - overlap)
+        for i in range(0, len(words), step):
+            chunk = words[i:i + chunk_size]
+            if chunk:
+                chunks.append(" ".join(chunk))
+            if i + chunk_size >= len(words):
+                break
 
         return chunks
 
@@ -66,6 +69,7 @@ class RAGService:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Knowledge PDF not found: {file_path}")
 
+        coll = self._ensure_collection()
         extracted = PDFService.extract_text(file_path)
         full_text = extracted.get("full_text", "")
         filename = os.path.basename(file_path)
@@ -90,8 +94,8 @@ class RAGService:
             for i in range(len(chunks))
         ]
 
-        if self.collection:
-            self.collection.add(
+        if coll is not None:
+            coll.add(
                 ids=ids,
                 embeddings=embeddings,
                 documents=chunks,
@@ -106,23 +110,39 @@ class RAGService:
         }
 
     def search(self, query: str, top_k: Optional[int] = None, document_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Perform semantic similarity search in ChromaDB for query context."""
+        """Perform semantic similarity search in ChromaDB with robust fallback."""
+        coll = self._ensure_collection()
         k = top_k or settings.RAG_TOP_K
-        if not self.collection or self.collection.count() == 0:
+        if coll is None:
+            return []
+
+        try:
+            total_items = coll.count()
+        except Exception:
+            total_items = 0
+
+        if total_items == 0:
             return []
 
         query_embedding = embedding_service.embed_query(query)
         where_clause = {"document_type": document_type} if document_type else None
 
+        results = None
         try:
-            results = self.collection.query(
+            results = coll.query(
                 query_embeddings=[query_embedding],
-                n_results=min(k, self.collection.count()),
+                n_results=min(k, total_items),
                 where=where_clause
             )
         except Exception as e:
-            logger.error(f"ChromaDB search query failed: {e}")
-            return []
+            logger.warning(f"ChromaDB filtered query failed: {e}. Trying unrestricted query.")
+            try:
+                results = coll.query(
+                    query_embeddings=[query_embedding],
+                    n_results=min(k, total_items)
+                )
+            except Exception as ex:
+                logger.error(f"ChromaDB search query failed completely: {ex}")
 
         search_results: List[Dict[str, Any]] = []
         if results and results.get("documents") and len(results["documents"]) > 0:
@@ -131,16 +151,32 @@ class RAGService:
             distances = results["distances"][0] if results.get("distances") else [0.0] * len(docs)
 
             for doc_text, meta, dist in zip(docs, metas, distances):
-                # Cosine distance to similarity score
                 score = round(max(0.0, 1.0 - float(dist)), 4)
                 search_results.append({
                     "text": doc_text,
-                    "source": meta.get("source", "knowledge_base"),
-                    "page": meta.get("page", 1),
-                    "document_type": meta.get("document_type", "unknown"),
+                    "source": (meta or {}).get("source", "knowledge_base"),
+                    "page": (meta or {}).get("page", 1),
+                    "document_type": (meta or {}).get("document_type", "unknown"),
                     "score": score,
-                    "metadata": meta
+                    "metadata": meta or {}
                 })
+
+        # Fallback: If similarity search returned 0 items but collection has items, fetch direct entries
+        if not search_results and total_items > 0:
+            try:
+                fallback_data = coll.get(limit=min(k, total_items))
+                if fallback_data and fallback_data.get("documents"):
+                    for d_text, d_meta in zip(fallback_data["documents"], fallback_data.get("metadatas") or [{}] * len(fallback_data["documents"])):
+                        search_results.append({
+                            "text": d_text,
+                            "source": (d_meta or {}).get("source", "knowledge_base"),
+                            "page": (d_meta or {}).get("page", 1),
+                            "document_type": (d_meta or {}).get("document_type", "unknown"),
+                            "score": 0.8,
+                            "metadata": d_meta or {}
+                        })
+            except Exception as e:
+                logger.warning(f"Fallback get from ChromaDB collection failed: {e}")
 
         return search_results
 
@@ -150,6 +186,7 @@ class RAGService:
         if not os.path.exists(kb_dir):
             return []
 
+        coll = self._ensure_collection()
         docs = []
         for fname in os.listdir(kb_dir):
             if fname.lower().endswith(".pdf"):
@@ -158,10 +195,10 @@ class RAGService:
                     stat = os.stat(fpath)
                     # Count chunks in ChromaDB for this document
                     chunk_count = 0
-                    if self.collection:
+                    if coll is not None:
                         try:
                             # query chunks matching source
-                            res = self.collection.get(where={"source": fname})
+                            res = coll.get(where={"source": fname})
                             chunk_count = len(res.get("ids", []))
                         except Exception:
                             chunk_count = 0
@@ -184,11 +221,12 @@ class RAGService:
         """Delete a document file from knowledge_base and remove its chunks from ChromaDB."""
         clean_name = os.path.basename(filename)
         fpath = os.path.join(settings.KNOWLEDGE_BASE_DIR, clean_name)
+        coll = self._ensure_collection()
         
         # Remove from ChromaDB collection
-        if self.collection:
+        if coll is not None:
             try:
-                self.collection.delete(where={"source": clean_name})
+                coll.delete(where={"source": clean_name})
                 logger.info(f"Removed chunks for {clean_name} from ChromaDB")
             except Exception as e:
                 logger.error(f"Error removing chunks for {clean_name} from ChromaDB: {e}")

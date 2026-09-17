@@ -20,6 +20,7 @@ from app.models.schemas import (
 from app.services.pdf_service import PDFService, PDFExtractionError
 from app.services.email_service import email_service
 from app.agents.document_agent import document_agent
+from app.agents.rag_agent import rag_agent
 from app.agents.extraction_agent import extraction_agent
 from app.agents.orchestrator import orchestrator
 from app.utils.file_utils import sanitize_filename, generate_document_id, is_safe_path, get_file_size_mb
@@ -153,7 +154,7 @@ def get_document_details(document_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{document_id}/extract", response_model=DocumentExtractionResponse)
 def extract_document(document_id: str, db: Session = Depends(get_db)):
-    """Trigger Document Understanding + Qwen Extraction for a document."""
+    """Trigger Document Understanding + RAG Retrieval + Qwen Extraction for a document."""
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail=f"Document '{document_id}' not found")
@@ -161,10 +162,18 @@ def extract_document(document_id: str, db: Session = Depends(get_db)):
     understanding = document_agent.understand(doc.extracted_text or "")
     doc.document_type = understanding.get("document_type", "general_document")
 
+    # Retrieve relevant RAG context
+    rag_res = rag_agent.retrieve_context(
+        document_text=doc.extracted_text or "",
+        document_type=doc.document_type
+    )
+    doc.retrieved_sources = rag_res.get("sources", [])
+
     extraction = extraction_agent.extract(
         document_text=doc.extracted_text or "",
         document_type=doc.document_type,
-        required_fields=understanding.get("required_fields", [])
+        required_fields=understanding.get("required_fields", []),
+        retrieved_knowledge=rag_res.get("context_text")
     )
 
     doc.extracted_data = extraction.get("fields", {})
