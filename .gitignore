@@ -29,6 +29,8 @@ ENV/
 # Database & runtime data
 *.db
 *.sqlite3
+Backend/data/chroma/*
+!Backend/data/chroma/.gitkeep
 Backend/data/input/*
 !Backend/data/input/.gitkeep
 Backend/data/output/*
