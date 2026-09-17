@@ -22,6 +22,7 @@ setup_logging(log_level="DEBUG" if settings.DEBUG else "INFO")
 logger = get_logger("app.main")
 
 from contextlib import asynccontextmanager
+from app.services.rag_service import rag_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,6 +30,22 @@ async def lifespan(app: FastAPI):
     init_db()
     settings.ensure_directories()
     logger.info("Database and storage directories successfully initialized.")
+    
+    # Auto-index existing knowledge base PDFs into ChromaDB if any
+    try:
+        kb_dir = settings.KNOWLEDGE_BASE_DIR
+        if os.path.exists(kb_dir):
+            for fname in os.listdir(kb_dir):
+                if fname.lower().endswith(".pdf"):
+                    fpath = os.path.join(kb_dir, fname)
+                    try:
+                        res = rag_service.ingest_pdf(fpath, document_type="policy")
+                        logger.info(f"Startup RAG sync: {fname} -> {res.get('chunks_indexed', 0)} chunks indexed.")
+                    except Exception as ex:
+                        logger.warning(f"Could not auto-index knowledge doc {fname}: {ex}")
+    except Exception as e:
+        logger.warning(f"Startup knowledge base indexing encountered an issue: {e}")
+
     yield
 
 # Create FastAPI application

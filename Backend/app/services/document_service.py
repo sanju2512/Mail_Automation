@@ -21,7 +21,8 @@ class DocumentService:
         document_id: str,
         document_type: str,
         data: Dict[str, Any],
-        output_dir: Optional[str] = None
+        output_dir: Optional[str] = None,
+        validation_status: str = "valid"
     ) -> str:
         """
         Generate a professional structured PDF document populated with extracted fields.
@@ -86,7 +87,8 @@ class DocumentService:
             elements.append(Paragraph(title_text, title_style))
             
             created_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-            subtitle_text = f"Document ID: <b>{document_id}</b> &nbsp;|&nbsp; Generated: {created_str} &nbsp;|&nbsp; Status: <b>VERIFIED</b>"
+            status_tag = "VERIFIED" if str(validation_status).lower() == "valid" else "REVIEW REQUIRED"
+            subtitle_text = f"Document ID: <b>{document_id}</b> &nbsp;|&nbsp; Generated: {created_str} &nbsp;|&nbsp; Status: <b>{status_tag}</b>"
             elements.append(Paragraph(subtitle_text, subtitle_style))
             elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=15))
 

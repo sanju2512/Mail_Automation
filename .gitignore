@@ -26,16 +26,14 @@ venv/
 env/
 ENV/
 
-# Database, vector stores & runtime data
+# Database & runtime data
 *.db
 *.sqlite3
-Backend/data/chroma/
 Backend/data/input/*
 !Backend/data/input/.gitkeep
 Backend/data/output/*
 !Backend/data/output/.gitkeep
-Backend/data/knowledge_base/*
-!Backend/data/knowledge_base/.gitkeep
+!Backend/data/knowledge_base/*.pdf
 Backend/data/templates/*
 !Backend/data/templates/.gitkeep
 

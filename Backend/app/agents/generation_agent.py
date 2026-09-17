@@ -17,13 +17,11 @@ class GenerationAgent:
     ) -> Dict[str, Any]:
         logger.info(f"GenerationAgent: Initiating document build for ID '{document_id}'...")
 
-        if validation_status != "valid":
-            raise DocumentGenerationError("Cannot generate document: Validation status is not 'valid'.")
-
         file_path = document_service.generate_pdf(
             document_id=document_id,
             document_type=document_type,
-            data=extracted_fields
+            data=extracted_fields,
+            validation_status=validation_status
         )
 
         return {

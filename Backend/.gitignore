@@ -39,16 +39,14 @@ ENV/
 # Environment variables
 .env
 
-# Database & Chroma storage
+# Database & Runtime data
 *.db
 *.sqlite3
-data/chroma/
 data/input/*
 !data/input/.gitkeep
 data/output/*
 !data/output/.gitkeep
-data/knowledge_base/*
-!data/knowledge_base/.gitkeep
+!data/knowledge_base/*.pdf
 data/templates/*
 !data/templates/.gitkeep
 

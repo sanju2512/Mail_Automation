@@ -94,7 +94,19 @@ class Orchestrator:
             doc.validation_errors = validation_res.get("errors", [])
             doc.validation_warnings = validation_res.get("warnings", [])
 
-            # STEP 6: Branch on Validation Result
+            # STEP 6: Generation Agent (Always build output document with extracted fields)
+            self._update_doc_status(db, doc, "GENERATING")
+            gen_res = generation_agent.generate(
+                document_id=document_id,
+                document_type=doc.document_type,
+                extracted_fields=doc.extracted_data,
+                validation_status=validation_res.get("status", "valid")
+            )
+            doc.output_filepath = gen_res.get("output_path")
+            doc.output_filename = gen_res.get("output_filename")
+            self._record_job(db, document_id, "DOCUMENT_GENERATION", "SUCCESS", gen_res)
+
+            # STEP 7: Branch on Validation Result
             if validation_res["status"] == "invalid":
                 # Branch: Error Agent
                 self._update_doc_status(db, doc, "INVALID")
@@ -118,22 +130,12 @@ class Orchestrator:
                     "retrieved_context": doc.retrieved_sources,
                     "validation": validation_res,
                     "suggested_actions": doc.suggested_actions,
-                    "error_message": doc.error_message
+                    "error_message": doc.error_message,
+                    "output_file": doc.output_filename,
+                    "download_url": gen_res.get("download_url")
                 }
 
-            # Branch: Generation Agent
-            self._update_doc_status(db, doc, "GENERATING")
-            gen_res = generation_agent.generate(
-                document_id=document_id,
-                document_type=doc.document_type,
-                extracted_fields=doc.extracted_data,
-                validation_status="valid"
-            )
-
-            doc.output_filepath = gen_res.get("output_path")
-            doc.output_filename = gen_res.get("output_filename")
             self._update_doc_status(db, doc, "COMPLETED")
-            self._record_job(db, document_id, "DOCUMENT_GENERATION", "SUCCESS", gen_res)
             db.commit()
 
             return {
