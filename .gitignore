@@ -35,6 +35,7 @@ Backend/data/input/*
 !Backend/data/input/.gitkeep
 Backend/data/output/*
 !Backend/data/output/.gitkeep
+
 !Backend/data/knowledge_base/*.pdf
 Backend/data/templates/*
 !Backend/data/templates/.gitkeep
